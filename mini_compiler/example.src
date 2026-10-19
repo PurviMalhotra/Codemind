@@ -1,0 +1,8 @@
+// Example program for the mini compiler
+int a;
+int b;
+int result;
+
+a = 10;
+b = 5 + 2 * 3;
+result = a + b * 2;

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.dSYM/
+.DS_Store
+mini_compiler/mini_compiler
+mini_compiler/y.tab.c
+mini_compiler/y.tab.h
+mini_compiler/lex.yy.c
+mini_compiler/ast.dot
+mini_compiler/ast.png
+mini_compiler/tac.txt
+mini_compiler/optimized_tac.txt
