@@ -21,3 +21,16 @@ make test-lab
 ```
 
 Flex-generated C emits warnings with the old Flex version bundled by Apple, but the lab builds and all its checks pass. No executable, generated parser sources, or debug artifacts are required in the source ZIP; `make lab` recreates the lab executable locally.
+
+## Visual feature update
+
+- 39 automated tests pass under Python 3.12, including correction preview edits, UTF-8 fix-it positions, syntax-colouring boundaries, actual token/AST/symbol/TAC artifacts, and lexical/syntax/semantic failure paths.
+- The desktop integration script checks coloured tokens, line-number rendering, a missing-parenthesis diff, compiler-checking the proposal, applying it to the editor, and the actual pipeline/AST widgets.
+- The existing seven compiler-lab checks continue to pass.
+- Screenshots of the correction comparison and pipeline windows were inspected for layout.
+
+Optional desktop check (requires a display and Tk 8.6+):
+
+```sh
+python3 tests/gui_smoke.py
+```

@@ -1,12 +1,23 @@
 #include "common.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 extern FILE *yyin;
 extern int yyparse(void);
+extern int yylex(void);
+extern FILE *token_trace;
 void write_dot(ASTNode *program, const char *filename);
 
 int main(int argc, char **argv) {
+    if (argc == 3 && strcmp(argv[1], "--tokens") == 0) {
+        yyin = fopen(argv[2], "r");
+        if (!yyin) { perror(argv[2]); return 2; }
+        token_trace = stdout;
+        while (yylex()) {}
+        fclose(yyin);
+        return lexical_errors ? 1 : 0;
+    }
     if (argc > 2) {
         fprintf(stderr, "Usage: %s [input_file]\n", argv[0]);
         return 2;

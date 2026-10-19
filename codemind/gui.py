@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from .engine import AnalysisError, analyze, compare_reports, format_text, learning_question
+from .widgets import CodeView
 
 
 DEMO = """#include <stdio.h>
@@ -30,7 +31,7 @@ class Editor:
         self.busy = False
         self.results = queue.Queue()
         root.title("CodeMind · C error explainer")
-        root.geometry("1180x800")
+        root.geometry("1280x820")
         root.minsize(900, 650)
         root.configure(background="#eef3f5")
         style = ttk.Style(root)
@@ -49,9 +50,14 @@ class Editor:
                                ("Load slide demo", self.demo)):
             ttk.Button(toolbar, text=label, command=command).pack(side="left", padx=(0, 6))
         self.standard = tk.StringVar(value=standard)
-        ttk.Combobox(toolbar, textvariable=self.standard, values=("c99", "c11", "c17"), state="readonly", width=6).pack(side="left", padx=6)
+        self.standard_box = ttk.Combobox(toolbar, textvariable=self.standard, values=("c99", "c11", "c17"), state="readonly", width=6)
+        self.standard_box.pack(side="left", padx=6)
+        self.standard_box.bind('<<ComboboxSelected>>', self.change_standard)
         self.analyze_button = ttk.Button(toolbar, text="Analyze C  ⌘↵", command=self.start)
         self.analyze_button.pack(side="left", padx=6)
+        self.preview_button = ttk.Button(toolbar, text="Compare correction", command=self.preview, state="disabled")
+        self.preview_button.pack(side="left", padx=6)
+        ttk.Button(toolbar, text="Compiler lab", command=self.lab).pack(side="left", padx=6)
         self.export_button = ttk.Button(toolbar, text="Export report", command=self.export, state="disabled")
         self.export_button.pack(side="right")
         panes = ttk.Panedwindow(outer, orient="horizontal")
@@ -61,10 +67,9 @@ class Editor:
         panes.add(right, weight=1)
         self.filename = tk.StringVar(value="Untitled C program")
         ttk.Label(left, textvariable=self.filename).pack(anchor="w", pady=(0, 6))
-        self.code = ScrolledText(left, wrap="none", undo=True, font=("Menlo", 13),
-                                 bg="#102a36", fg="#e5f2f4", insertbackground="#7ee0ce",
-                                 selectbackground="#315765", padx=12, pady=12, width=45)
-        self.code.pack(fill="both", expand=True, padx=(0, 12))
+        self.code_view = CodeView(left, font_size=13)
+        self.code_view.pack(fill="both", expand=True, padx=(0, 12))
+        self.code = self.code_view.text
         self.code.tag_configure("errorline", background="#663d40")
         self.position = tk.StringVar(value="Line 1, column 1")
         ttk.Label(left, textvariable=self.position).pack(anchor="w", pady=6)
@@ -117,6 +122,7 @@ class Editor:
     def invalidate(self):
         self.report = None
         self.export_button.configure(state="disabled")
+        self.preview_button.configure(state="disabled")
         self.code.tag_remove("errorline", "1.0", "end")
         self.tree.delete(*self.tree.get_children())
         self.summary.set("Source changed. Analyze to refresh feedback.")
@@ -128,16 +134,24 @@ class Editor:
             self.dirty = True
             self.invalidate()
             self.code.edit_modified(False)
+            self.code_view.schedule()
 
     def cursor(self, event=None):
         line, col = self.code.index("insert").split(".")
         self.position.set(f"Line {line}, column {int(col) + 1}")
+
+    def change_standard(self, event=None):
+        self.invalidate()
+        self.previous_report = None
+        self.summary.set('C standard changed. Analyze to refresh feedback.')
+        self.put(self.progress, 'C standard changed. Analyze again to start a new comparison.')
 
     def set_source(self, text):
         self.code.delete("1.0", "end")
         self.code.insert("1.0", text)
         self.code.edit_reset()
         self.code.edit_modified(False)
+        self.code_view.highlight()
         self.dirty = False
         self.previous_report = None
         self.invalidate()
@@ -190,6 +204,7 @@ class Editor:
         self.invalidate()
         self.busy = True
         self.analyze_button.configure(state="disabled")
+        self.standard_box.configure(state='disabled')
         self.status.set("Reading compiler diagnostics…")
         source, path, standard = self.text(), self.path, self.standard.get()
         def worker():
@@ -209,6 +224,7 @@ class Editor:
         else:
             self.busy = False
             self.analyze_button.configure(state="normal")
+            self.standard_box.configure(state='readonly')
             if source != self.text() or path != self.path:
                 self.status.set("Source changed during analysis. Analyze again for current feedback.")
             elif error:
@@ -218,6 +234,7 @@ class Editor:
             else:
                 self.report = report
                 self.export_button.configure(state="normal")
+                self.preview_button.configure(state="normal" if report.diagnostics else "disabled")
                 tip = "Fix the first error, then analyze again." if report.errors else "Compiler checks passed. Review any warnings below."
                 self.summary.set(f"{report.errors} error(s) · {report.warnings} warning(s)\n{tip}")
                 if self.previous_report is not None:
@@ -267,6 +284,15 @@ class Editor:
             self.status.set(f"Report saved to {path}")
         except OSError as error:
             messagebox.showerror("Cannot export report", str(error), parent=self.root)
+
+    def preview(self):
+        if self.report is not None:
+            from .preview import CorrectionPreview
+            CorrectionPreview(self)
+
+    def lab(self):
+        from .lab_gui import LabWindow
+        LabWindow(self.root)
 
     def close(self):
         if self.can_replace():

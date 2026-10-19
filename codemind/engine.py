@@ -35,6 +35,16 @@ class Diagnostic:
 
 
 @dataclass
+class FixIt:
+    file: str
+    start_line: int
+    start_column: int
+    end_line: int
+    end_column: int
+    replacement: str
+
+
+@dataclass
 class Report:
     filename: str
     compiler: str
@@ -42,6 +52,7 @@ class Report:
     returncode: int
     diagnostics: list[Diagnostic]
     raw_output: str
+    fixits: list[FixIt] = field(default_factory=list)
 
     @property
     def errors(self) -> int:
@@ -177,6 +188,24 @@ def find_compiler(requested: str | None = None) -> str:
     raise AnalysisError("No C compiler found. Install GCC or Clang and put it on PATH, or use --compiler /path/to/compiler.")
 
 
+def parse_fixits(output: str, compiler_path: str, filename: str) -> list[FixIt]:
+    pattern = re.compile(r'^fix-it:("(?:\\.|[^"\\])*"):\{(\d+):(\d+)-(\d+):(\d+)\}:("(?:\\.|[^"\\])*")$')
+    edits = []
+    for line in output.splitlines():
+        match = pattern.match(line)
+        if not match:
+            continue
+        path, sl, sc, el, ec, replacement = match.groups()
+        try:
+            if json.loads(path) == compiler_path:
+                edit = FixIt(filename, int(sl), int(sc), int(el), int(ec), json.loads(replacement))
+                if edit not in edits:
+                    edits.append(edit)
+        except (ValueError, TypeError):
+            continue
+    return edits
+
+
 def analyze(source: str, filename: str = "program.c", compiler: str | None = None,
             standard: str = "c11", include_dir: str | None = None) -> Report:
     if standard not in ("c99", "c11", "c17"):
@@ -190,7 +219,7 @@ def analyze(source: str, filename: str = "program.c", compiler: str | None = Non
         path = Path(directory) / "input.c"
         path.write_text(source, encoding="utf-8")
         command = [executable, f"-std={standard}", "-Wall", "-Wextra", "-Wpedantic",
-                   "-fsyntax-only", "-fno-diagnostics-color", str(path)]
+                   "-fsyntax-only", "-fno-diagnostics-color", "-fdiagnostics-parseable-fixits", str(path)]
         if include_dir:
             command.extend(["-iquote", str(Path(include_dir).resolve())])
         try:
@@ -210,7 +239,7 @@ def analyze(source: str, filename: str = "program.c", compiler: str | None = Non
                                           "The compiler failed without a recognized error diagnostic.",
                                           "Check the original output and the selected compiler installation."))
         return Report(filename, executable, standard, process.returncode, diagnostics,
-                      output.replace(str(path), filename))
+                      output.replace(str(path), filename), parse_fixits(output, str(path), filename))
 
 
 def format_text(report: Report) -> str:

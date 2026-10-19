@@ -17,6 +17,14 @@ This implementation puts the diagnostic explainer first and preserves the origin
 | Missing parenthesis demonstration | `examples/slide_example.c` and `examples/slide_fixed.c` |
 | Interface and tests | Tkinter editor, terminal interface, integration tests |
 
+## Visual features
+
+The C editor uses display-only token colouring for keywords, strings, comments, numbers, and preprocessor directives, with line numbers that follow vertical scrolling. GCC/Clang remains responsible for determining validity.
+
+The correction comparison shows original and proposed source side by side. It reads machine-readable compiler fix-it hints for the main source file and adds a narrowly scoped missing-parenthesis suggestion. Where no exact edit is available, the student can edit the proposed source manually. The proposed version is checked independently before Apply is enabled. The editor rejects applying a preview when the main document has changed since the preview opened. Applying a preview changes the editor buffer and preserves undo; saving is a separate action.
+
+The visual lab builds the actual Flex/Yacc sources in a temporary directory for every inspection. The lexer’s `--tokens` mode reports real token names and lexemes. Yacc and the existing semantic/IR stages produce the AST, symbol table, TAC, and optimized TAC. The GUI renders the DOT node/edge data directly on a Tk canvas, so Graphviz is optional. Failed stages are labelled and subsequent stages are skipped. The lab is explicitly a separate arithmetic mini language, not full C.
+
 ## Additional learning features
 
 **Fix & check** compares counts for each diagnostic rule and severity between successive checks. It helps students see the effect of an edit without claiming that a reduced count proves correctness. Opening a different file or loading the demo starts a new comparison session.
@@ -84,12 +92,12 @@ Original arithmetic parsing, text AST, Graphviz export, symbol table, semantic c
 - **Is this an AI model?** No. It uses deterministic explanation rules. The prototype's word “intelligent” describes contextual feedback, not a trained model.
 - **Why use GCC/Clang?** Implementing full C in the original arithmetic grammar would exceed the small project's scope. A real compiler supplies authoritative syntax and type diagnostics.
 - **Why keep original messages?** They make the explanation traceable and cover messages that the rule set does not yet support.
-- **Does it automatically repair code?** No. It suggests an action, and the student makes and checks the edit.
+- **Does it automatically repair code?** It can preview selected compiler edits or a rule suggestion, but the student checks and explicitly applies the proposal. It does not claim to repair arbitrary programs.
 - **Does zero errors mean a correct program?** No. Syntax and compiler checks do not test linking, runtime inputs, memory safety, or intended behavior.
 - **Is the feature set unique research?** No novelty claim is made. The project's contribution is its combination of explainable feedback, learning prompts, a fix-check loop, and an inspectable compiler lab for this class.
 
 ## Boundaries and next steps
 
-The tool checks one translation unit with standard warnings. It does not execute programs, resolve build systems, diagnose arbitrary compiler families, or repair source automatically. Some compile-time warnings depend on optimization and compiler version. Diagnostic explanations are heuristic and can be influenced by preceding errors. Header diagnostics retain their own locations rather than showing an unrelated main-source line.
+The tool checks one translation unit with standard warnings. It does not execute programs, resolve build systems, diagnose arbitrary compiler families, or repair arbitrary source automatically. Some compile-time warnings depend on optimization and compiler version. Diagnostic explanations are heuristic and can be influenced by preceding errors. Header diagnostics retain their own locations rather than showing an unrelated main-source line.
 
 Possible later extensions include instructor-authored rules, configurable include paths, controlled runtime test cases, and a carefully implemented full C subset in Flex/Yacc. These are proposals, not features included in this submission.

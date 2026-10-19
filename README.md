@@ -9,7 +9,7 @@ CodeMind reads real compiler diagnostics and connects each supported message to 
 Double-click `launch.command`, or run these commands in Terminal:
 
 ```sh
-cd "/Users/purvimalhotra/Documents/ChatGPT/Compiler design/codemind"
+cd "/Users/purvimalhotra/Developer/Compiler design/codemind"
 python3 -m codemind --gui
 ```
 
@@ -43,7 +43,9 @@ Exit codes: `0` means no compiler errors (warnings may remain), `1` means compil
 
 ## Features
 
-- Desktop source editor with Open/Save, C standard selection, and a built-in version of the slide example.
+- Desktop source editor with syntax colouring, scroll-synchronised line numbers, Open/Save, C standard selection, and a built-in version of the slide example.
+- **Compare correction:** side-by-side source views with red/green change highlights, compiler-provided edits where available, a missing-parenthesis suggestion, manual edits, and independent compiler checks before applying a preview.
+- **Compiler lab:** an interactive Flex/Yacc pipeline with actual token output, a clickable AST diagram with zoom/scroll/Fit tree, a symbol table, TAC, optimized TAC, and stage failure status. No Graphviz installation is required for the built-in AST viewer.
 - Lexical, syntax, and semantic explanation rules, plus missing-header feedback from preprocessing.
 - Exact compiler message, source context, line and column, and related compiler notes.
 - First-error guidance to help beginners work through cascading messages. All diagnostics remain available.
@@ -52,7 +54,7 @@ Exit codes: `0` means no compiler errors (warnings may remain), `1` means compil
 - Text and JSON report export. The original compiler output stays available for verification.
 - A retained Flex/Yacc lab for ASTs, symbol tables, three-address code, optimization, and Graphviz export.
 
-Suggested corrections are guidance, not automatic edits. Analyze again after making a change. Diagnostic count changes do not establish that a particular bug has been repaired. Compiler checks do not prove runtime correctness.
+Suggested corrections are guidance. A preview only changes the editor after you click Apply to editor; it does not save your source file. The comparison also permits manual edits when no exact compiler edit is available. Analyze again after making a change. Diagnostic count changes do not establish that a particular bug has been repaired. Compiler checks do not prove runtime correctness.
 
 ## Explanation coverage
 
@@ -65,6 +67,17 @@ Suggested corrections are guidance, not automatic edits. Analyze again after mak
 | Preprocessor | Missing include files |
 
 These are diagnostic pattern families, not a complete implementation of C. Compiler version and flags determine which diagnostics appear and whether they are warnings or errors. Unrecognized messages get an explicit fallback rather than an invented explanation. A missing semicolon may be reported on the following line, so CodeMind explains that possibility without fabricating a location.
+
+## Try the visual features
+
+1. Launch with `./launch.command`. Code colouring and line numbers appear automatically.
+2. Load the slide demo and click **Analyze C**. Select the missing-parenthesis diagnostic, then **Compare correction**.
+3. The left view is the original. The editable right view previews a possible change. Changed lines have red/green backgrounds.
+4. Click **Check proposed code**. The check uses a temporary copy and shows the error/warning counts. Click **Apply to editor** to accept the edit, then save and analyze again.
+5. Click **Compiler lab**. Its source editor starts with a separate `.src` example. Click **Build & inspect**, then explore **Tokens**, **Parse / AST**, **Semantics**, **TAC**, and **Optimize**.
+6. Click AST nodes for explanations. Zoom, scroll, or use **Fit tree** to explore the graph. Invalid programs show the failed stage and skip later stages.
+
+The lab builds the existing Flex/Yacc C sources in a temporary directory. It needs make, Flex, Yacc/Bison, and a C compiler. Small examples are recommended; the interactive viewer limits ASTs to 300 nodes. Lab source is limited to 50 KB. These limits keep the visual teaching view responsive.
 
 ## Flex/Yacc learning lab
 
