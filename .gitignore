@@ -10,3 +10,4 @@ mini_compiler/ast.dot
 mini_compiler/ast.png
 mini_compiler/tac.txt
 mini_compiler/optimized_tac.txt
+mini_compiler/symbols.tsv

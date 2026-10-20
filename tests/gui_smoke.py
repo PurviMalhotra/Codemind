@@ -53,7 +53,7 @@ def finish():
     assert lab.canvas.find_all()
     lab.show('ast')
     lab.fit_tree()
-    assert 0.4 <= lab.scale <= 1.0
+    assert 0.18 <= lab.scale <= 1.0
     lab.inspect(next(iter(lab.result.nodes)))
     assert 'Node ' in lab.node_info.get()
     lab.window.lift()

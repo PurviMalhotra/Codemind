@@ -1,0 +1,5 @@
+int result = 0;
+{
+    int hidden = 3;
+}
+result = hidden;

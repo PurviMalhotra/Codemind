@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import tempfile
 
+from .cfg import build_cfg
+
 
 DEMO = '''int a;
 int b;
@@ -15,6 +17,21 @@ a = 10;
 b = 5 + 2 * 3;
 result = (a + b) / 2.0;
 '''
+
+
+CONTROL_DEMO = """int i = 0;
+int total = 0;
+
+while (i < 5) {
+    if (i % 2 == 0) {
+        total = total + i;
+    } else {
+        int bonus = 1;
+        total = total + bonus;
+    }
+    i = i + 1;
+}
+"""
 
 
 class LabError(Exception):
@@ -29,6 +46,11 @@ class LabResult:
     edges: list = field(default_factory=list)
     symbols: list = field(default_factory=list)
     ast_text: str = ''
+    node_lines: dict = field(default_factory=dict)
+    ast_edge_labels: dict = field(default_factory=dict)
+    scope_symbols: list = field(default_factory=list)
+    cfg: object = None
+    cfg_dot: str = ''
     tac: str = ''
     optimized: str = ''
     output: str = ''
@@ -38,7 +60,7 @@ class LabResult:
 def graph_from_dot(text):
     nodes, edges = {}, []
     for line in text.splitlines():
-        node = re.search(r'\bn(\d+) \[label="([^"]*)"\]', line)
+        node = re.search(r'^\s*n(\d+) \[label="([^"]*)"', line)
         edge = re.search(r'\bn(\d+) -> n(\d+)', line)
         if node:
             nodes[node[1]] = node[2]
@@ -59,7 +81,7 @@ def run_lab(source, lab_dir=None):
     lab_dir = Path(lab_dir) if lab_dir else Path(__file__).resolve().parent.parent / 'mini_compiler'
     if not shutil.which('make'):
         raise LabError('The lab needs make, Flex, a Yacc-compatible parser generator, and a C compiler. Install these tools to build the lab.')
-    result = LabResult(stages={name:'skipped' for name in ('tokens', 'ast', 'symbols', 'tac', 'optimized')})
+    result = LabResult(stages={name:'skipped' for name in ('tokens', 'ast', 'symbols', 'tac', 'cfg', 'optimized')})
     def run(command, cwd, timeout=30):
         try:
             return subprocess.run(command, cwd=cwd, capture_output=True, text=True,
@@ -98,22 +120,33 @@ def run_lab(source, lab_dir=None):
         if not ast_path.exists():
             result.stages['ast'] = 'failed'
             return result
-        result.nodes, result.edges = graph_from_dot(ast_path.read_text())
+        dot = ast_path.read_text()
+        result.nodes, result.edges = graph_from_dot(dot)
+        result.node_lines = {m[1]:int(m[2]) for m in re.finditer(r'n(\d+) \[label="[^\n]*?", line=(\d+)',dot)}
+        result.ast_edge_labels = {(m[1],m[2]):m[3] for m in re.finditer(r'n(\d+) -> n(\d+) \[.*?label="([^"]*)"',dot)}
         if len(result.nodes) > 300:
             raise LabError('This AST has more than 300 nodes. Use a smaller lab example to keep the interactive diagram readable.')
         result.ast_text = section(compiled.stdout, '=== AST / PARSE STRUCTURE ===', 'Wrote ast.dot.')
         result.stages['ast'] = 'passed'
         result.stages['symbols'] = 'passed' if compiled.returncode == 0 else 'failed'
-        table = section(compiled.stdout, 'Symbol table:', 'Semantic analysis')
-        for line in table.splitlines():
-            fields = line.split()
-            if len(fields) == 2 and fields[1] in ('int', 'float'):
-                result.symbols.append(tuple(fields))
+        table_path = work / 'symbols.tsv'
+        if table_path.exists():
+            for line in table_path.read_text().splitlines():
+                name,kind,scope,depth,storage,source_line = line.split('\t')
+                result.symbols.append((name,kind))
+                result.scope_symbols.append((name,kind,scope,depth,storage,source_line))
         for key, name in (('tac','tac.txt'), ('optimized','optimized_tac.txt')):
             path = work / name
             if path.exists() and compiled.returncode == 0:
                 setattr(result, key, path.read_text())
                 result.stages[key] = 'passed'
+        if result.stages['tac'] == 'passed':
+            try:
+                result.cfg = build_cfg(result.tac)
+            except ValueError as error:
+                raise LabError(f'Cannot construct control-flow graph: {error}') from error
+            result.cfg_dot = result.cfg.to_dot()
+            result.stages['cfg'] = 'passed'
         return result
 
 

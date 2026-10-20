@@ -23,7 +23,7 @@ The C editor uses display-only token colouring for keywords, strings, comments, 
 
 The correction comparison shows original and proposed source side by side. It reads machine-readable compiler fix-it hints for the main source file and adds a narrowly scoped missing-parenthesis suggestion. Where no exact edit is available, the student can edit the proposed source manually. The proposed version is checked independently before Apply is enabled. The editor rejects applying a preview when the main document has changed since the preview opened. Applying a preview changes the editor buffer and preserves undo; saving is a separate action.
 
-The visual lab builds the actual Flex/Yacc sources in a temporary directory for every inspection. The lexer’s `--tokens` mode reports real token names and lexemes. Yacc and the existing semantic/IR stages produce the AST, symbol table, TAC, and optimized TAC. The GUI renders the DOT node/edge data directly on a Tk canvas, so Graphviz is optional. Failed stages are labelled and subsequent stages are skipped. The lab is explicitly a separate arithmetic mini language, not full C.
+The visual lab builds the actual Flex/Yacc sources in a temporary directory for every inspection. The lexer’s `--tokens` mode reports real token names and lexemes. Yacc and the existing semantic/IR stages produce the AST, symbol table, TAC, and optimized TAC. The GUI renders the DOT node/edge data directly on a Tk canvas, so Graphviz is optional. Failed stages are labelled and subsequent stages are skipped. The lab is explicitly a C-like subset with arithmetic, comparisons, if/else, while, and block scope, not full C.
 
 ## Additional learning features
 
@@ -75,7 +75,7 @@ Separate lab:
 - Rejected floating-point modulo operands and removed unsafe integer casts from modulo evaluation.
 - Used `$t` temporary names so compiler-generated temporaries cannot clash with identifiers accepted by the lexer.
 
-Original arithmetic parsing, text AST, Graphviz export, symbol table, semantic checks, TAC generation, and the optimizer are retained. The mini language has approximate line locations and a simplified numeric model. It is suitable for teaching compiler phases, not for compiling C.
+Original arithmetic parsing, text AST, Graphviz export, symbol table, semantic checks, TAC generation, and the optimizer are retained. AST identifier, declaration, control, and literal nodes now retain token-based source lines; syntax-error recovery still uses approximate lookahead lines. The mini language has a simplified numeric model. It is suitable for teaching compiler phases, not for compiling C.
 
 ## Five-minute demonstration
 
@@ -101,3 +101,17 @@ Original arithmetic parsing, text AST, Graphviz export, symbol table, semantic c
 The tool checks one translation unit with standard warnings. It does not execute programs, resolve build systems, diagnose arbitrary compiler families, or repair arbitrary source automatically. Some compile-time warnings depend on optimization and compiler version. Diagnostic explanations are heuristic and can be influenced by preceding errors. Header diagnostics retain their own locations rather than showing an unrelated main-source line.
 
 Possible later extensions include instructor-authored rules, configurable include paths, controlled runtime test cases, and a carefully implemented full C subset in Flex/Yacc. These are proposals, not features included in this submission.
+
+## Control-flow and scope extension
+
+The traditional Yacc grammar now supports `if/else`, `while`, and scoped blocks, along with relational/equality and logical operators. It resolves dangling `else` by attaching it to the nearest unmatched `if`, without unresolved parser conflicts. Declarations are block items, so a declaration directly after `if` or `while` requires braces. Initializers and empty statements are supported.
+
+The AST has dedicated If, While, and Block nodes. If stores condition, then, and optional else children. While stores condition and body. Semantic traversal pushes a scope on block entry, resolves identifiers from the innermost scope outward, and restores the outer scope on block exit. All declarations remain in the displayed history table even after their visibility ends. Each declaration has a distinct TAC storage identity; inner `x` might become `x@S1`.
+
+TAC uses labels, conditional branches, unconditional jumps, and short-circuit control flow for `&&`, `||`, and `!`. The CFG is derived from this actual TAC, identifying leaders, basic blocks, fallthrough paths, conditional outcomes, and loop backedges. It is a view of execution paths, not a runtime trace or a termination proof. `codemind/cfg.py` also exports the graph as DOT.
+
+The previous straight-line optimizer was replaced with conservative propagation inside basic blocks only. Every label and branch discards constant facts. This preserves changing loop variables and branch joins, at the cost of missing some possible global optimizations. A bounded TAC evaluator exists only in the test suite to compare original and optimized execution results. The application itself does not execute user programs.
+
+Demo: load **Loop + if/else example**, inspect the While and If AST nodes, select **Scopes** for `bonus@S3`, and select **Flow graph** for true/false and loop-back edges. Open `mini_compiler/examples/block_scope.src` to show two different `x` declarations. Open `mini_compiler/tests/invalid_scope.src` to show a variable used after its scope ends.
+
+Not yet supported by the lab: functions/main, headers, for/do loops, break/continue, arrays, pointers, ++/--, compound assignments, or full C numeric semantics.

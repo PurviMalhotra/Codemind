@@ -1,0 +1,6 @@
+int x = 10;
+{
+    int x = 3;
+    x = x + 1;
+}
+int result = x;

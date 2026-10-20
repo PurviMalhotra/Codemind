@@ -1,0 +1,12 @@
+int i = 0;
+int total = 0;
+
+while (i < 5) {
+    if (i % 2 == 0) {
+        total = total + i;
+    } else {
+        int bonus = 1;
+        total = total + bonus;
+    }
+    i = i + 1;
+}

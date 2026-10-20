@@ -45,7 +45,9 @@ int main(int argc, char **argv) {
     printf("Wrote ast.dot. If Graphviz is installed, run: dot -Tpng ast.dot -o ast.png\n");
 
     printf("\n=== SEMANTIC ANALYSIS ===\n");
-    if (!semantic_analyze(root)) {
+    int semantics_ok = semantic_analyze(root);
+    write_dot(root, "ast.dot"); /* attach scope identities after name resolution */
+    if (!semantics_ok) {
         fprintf(stderr, "Intermediate code generation skipped because semantic analysis failed.\n");
         free_ast(root);
         return 1;

@@ -26,7 +26,7 @@ mini_compiler: y.tab.c lex.yy.c common.c dot.c main.c common.h
 	$(CC) $(CFLAGS) -o mini_compiler y.tab.c lex.yy.c common.c dot.c main.c -lm
 
 clean:
-	rm -f mini_compiler y.tab.c y.tab.h lex.yy.c ast.dot ast.png tac.txt optimized_tac.txt
+	rm -f mini_compiler y.tab.c y.tab.h lex.yy.c ast.dot ast.png tac.txt optimized_tac.txt symbols.tsv
 
 run: mini_compiler
 	./mini_compiler example.src

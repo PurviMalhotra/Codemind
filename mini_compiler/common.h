@@ -11,7 +11,11 @@ typedef enum {
     NODE_FLOAT,
     NODE_ID,
     NODE_BINOP,
-    NODE_UNARY
+    NODE_UNARY,
+    NODE_BLOCK,
+    NODE_IF,
+    NODE_WHILE,
+    NODE_EMPTY
 } NodeKind;
 
 typedef struct ASTNode {
@@ -23,7 +27,13 @@ typedef struct ASTNode {
     struct ASTNode *left;
     struct ASTNode *right;
     struct ASTNode *next;
+    struct ASTNode *third; /* else branch */
+    char *storage;        /* resolved symbol identity for scoped TAC */
+    int scope_id;
 } ASTNode;
+
+typedef struct { char *text; int line; } NameToken;
+typedef struct { double value; int line; } NumberToken;
 
 ASTNode *make_node(NodeKind kind, const char *text, ASTNode *left,
                    ASTNode *right, int line);

@@ -34,3 +34,14 @@ Optional desktop check (requires a display and Tk 8.6+):
 ```sh
 python3 tests/gui_smoke.py
 ```
+
+## Control-flow extension
+
+- 61 automated tests pass under Python 3.12. The added suite builds the actual lexer/parser and uses a bounded TAC evaluator to compare original and optimized results for nested loops, zero-iteration loops, both branch outcomes, dangling-else binding, short-circuit logic, float loop values, and block shadowing.
+- Invalid out-of-scope names, duplicate declarations, declarations after use, malformed conditions, and invalid branch-body declarations are rejected.
+- CFG tests verify true/false targets, loop cycles, graph coverage, DOT output, and missing-label rejection. AST tests verify real node labels and source-line mappings.
+- The desktop test verifies loop-node source highlighting, scope identities, CFG inspection/zoom/fit, and removal of stale graphs after semantic failure.
+
+```sh
+python3 tests/gui_control_flow_smoke.py
+```

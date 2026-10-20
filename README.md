@@ -45,7 +45,7 @@ Exit codes: `0` means no compiler errors (warnings may remain), `1` means compil
 
 - Desktop source editor with syntax colouring, scroll-synchronised line numbers, Open/Save, C standard selection, and a built-in version of the slide example.
 - **Compare correction:** side-by-side source views with red/green change highlights, compiler-provided edits where available, a missing-parenthesis suggestion, manual edits, and independent compiler checks before applying a preview.
-- **Compiler lab:** an interactive Flex/Yacc pipeline with actual token output, a clickable AST diagram with zoom/scroll/Fit tree, a symbol table, TAC, optimized TAC, and stage failure status. No Graphviz installation is required for the built-in AST viewer.
+- **Compiler lab:** an interactive Flex/Yacc pipeline with actual token output, a clickable AST diagram with zoom/scroll/Fit tree, a scope-aware symbol table, TAC, a control-flow graph, optimized TAC, and stage failure status. No Graphviz installation is required for the built-in AST viewer.
 - Lexical, syntax, and semantic explanation rules, plus missing-header feedback from preprocessing.
 - Exact compiler message, source context, line and column, and related compiler notes.
 - First-error guidance to help beginners work through cascading messages. All diagnostics remain available.
@@ -74,7 +74,7 @@ These are diagnostic pattern families, not a complete implementation of C. Compi
 2. Load the slide demo and click **Analyze C**. Select the missing-parenthesis diagnostic, then **Compare correction**.
 3. The left view is the original. The editable right view previews a possible change. Changed lines have red/green backgrounds.
 4. Click **Check proposed code**. The check uses a temporary copy and shows the error/warning counts. Click **Apply to editor** to accept the edit, then save and analyze again.
-5. Click **Compiler lab**. Its source editor starts with a separate `.src` example. Click **Build & inspect**, then explore **Tokens**, **Parse / AST**, **Semantics**, **TAC**, and **Optimize**.
+5. Click **Compiler lab**. Its source editor starts with a separate `.src` example. Click **Build & inspect**, then explore **Tokens**, **Parse / AST**, **Scopes**, **TAC**, **Flow graph**, and **Optimize**. Use **Loop + if/else example** to try the new control-flow syntax.
 6. Click AST nodes for explanations. Zoom, scroll, or use **Fit tree** to explore the graph. Invalid programs show the failed stage and skip later stages.
 
 The lab builds the existing Flex/Yacc C sources in a temporary directory. It needs make, Flex, Yacc/Bison, and a C compiler. Small examples are recommended; the interactive viewer limits ASTs to 300 nodes. Lab source is limited to 50 KB. These limits keep the visual teaching view responsive.
@@ -87,9 +87,15 @@ cd mini_compiler
 ./mini_compiler example.src
 ```
 
-This preserves the original compiler architecture and its `.src` teaching language. It accepts `int`/`float` declarations and arithmetic assignments; it does **not** accept full C programs, functions, or `if` blocks. Its numeric model is educational and uses real-number division, unlike C integer division. CodeMind's main C checks always use the real C compiler.
+The lab accepts a C-like `.src` subset: `int`/`float` declarations with optional initializers, arithmetic assignments, comparisons, `&&`/`||`/`!`, nested `if/else`, `while`, and scoped `{ ... }` blocks. An `else` belongs to the nearest unmatched `if`. Logical operators use short-circuit branches in generated TAC. Local declarations may shadow outer names; names disappear from visibility at the closing brace, and same-scope duplicates are errors.
 
-The lab writes `ast.dot`, `tac.txt`, and `optimized_tac.txt` in its working directory for valid inputs. Graphviz is optional: `dot -Tpng ast.dot -o ast.png`. Files from a prior successful lab run are not evidence that a later invalid run succeeded; use the exit status.
+The **Scopes** table shows name, type, scope ID, nesting depth, unique storage name, and declaration line. Scope 0 is global. Names such as `x@S1` identify block-local variables in TAC; they are generated names, not source syntax. **Flow graph** groups actual TAC into basic blocks, shows true/false branch edges and purple loop-back edges, supports zoom/fit/click, and exports Graphviz `.dot` files. AST branch edges are labelled condition/then/else/body and clicking a node highlights its source line.
+
+The optimizer propagates constants only within a basic block and clears facts at every label or branch. It does not propagate a loop's starting value into its later iterations or across a branch join.
+
+This is still an educational subset: full C functions, `main`, headers, arrays, pointers, `for`, `break`, `continue`, `++`, and compound assignment are not implemented in the lab. Its generated TAC uses a simplified double-based numeric model, including real-number division; it does not emulate C integer widths or conversions. Static zero-divisor checks can reject expressions even in unreachable code. Use CodeMind's main editor for real C checks.
+
+The lab writes `ast.dot`, `symbols.tsv`, `tac.txt`, and `optimized_tac.txt` in its working directory for valid inputs. Graphviz is optional: `dot -Tpng ast.dot -o ast.png`. Files from a prior successful lab run are not evidence that a later invalid run succeeded; use the exit status.
 
 ## Tests and project guide
 
@@ -99,3 +105,9 @@ make test-lab
 ```
 
 See `docs/PROJECT_GUIDE.md` for the prototype mapping, architecture, changes to the supplied compiler, viva notes, and a short demonstration script. `examples/` includes both failing programs and corrected examples.
+
+## Try control flow and scope
+
+From the desktop, open **Compiler lab → Loop + if/else example → Build & inspect**. Select the While or If AST node, then explore **Scopes** and **Flow graph**.
+
+Other lab examples are in `mini_compiler/examples/`: `control_flow.src`, `nested_loops.src`, and `block_scope.src`. For a scope error, open `mini_compiler/tests/invalid_scope.src`. Source variables declared inside a block cannot be used after that block.

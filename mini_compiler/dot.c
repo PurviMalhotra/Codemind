@@ -9,6 +9,10 @@ static FILE *dot_file;
 static void label_for(ASTNode *n, char *buf, size_t size) {
     if (!n) { snprintf(buf, size, "null"); return; }
     switch (n->kind) {
+        case NODE_BLOCK: snprintf(buf, size, "Block: scope %d", n->scope_id); break;
+        case NODE_IF: snprintf(buf, size, "If"); break;
+        case NODE_WHILE: snprintf(buf, size, "While"); break;
+        case NODE_EMPTY: snprintf(buf, size, "Empty statement"); break;
         case NODE_PROGRAM: snprintf(buf, size, "Program"); break;
         case NODE_DECL: snprintf(buf, size, "Declaration: %s", n->text ? n->text : ""); break;
         case NODE_ASSIGN: snprintf(buf, size, "Assignment: %s", n->text ? n->text : ""); break;
@@ -25,15 +29,21 @@ static int draw_node(ASTNode *n) {
     int id = ++node_id;
     char label[256];
     label_for(n, label, sizeof(label));
-    fprintf(dot_file, "  n%d [label=\"%s\"];\n", id, label);
+    fprintf(dot_file, "  n%d [label=\"%s\", line=%d];\n", id, label, n->line);
 
     if (n->left) {
         int child = draw_node(n->left);
-        fprintf(dot_file, "  n%d -> n%d;\n", id, child);
+        fprintf(dot_file, "  n%d -> n%d [label=\"%s\"];\n", id, child,
+                (n->kind == NODE_IF || n->kind == NODE_WHILE) ? "condition" : n->kind == NODE_BLOCK ? "statements" : "left/type");
     }
     if (n->right) {
         int child = draw_node(n->right);
-        fprintf(dot_file, "  n%d -> n%d;\n", id, child);
+        fprintf(dot_file, "  n%d -> n%d [label=\"%s\"];\n", id, child,
+                n->kind == NODE_IF ? "then" : n->kind == NODE_WHILE ? "body" : "right/value");
+    }
+    if (n->third) {
+        int child = draw_node(n->third);
+        fprintf(dot_file, "  n%d -> n%d [label=\"else\"];\n", id, child);
     }
     if (n->next) {
         int child = draw_node(n->next);

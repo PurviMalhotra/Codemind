@@ -7,15 +7,17 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 import textwrap
 
-from .lab import DEMO, LabError, layout_graph, run_lab
+from .lab import DEMO, CONTROL_DEMO, LabError, layout_graph, run_lab
+from .flow_view import FlowView
 from .widgets import CodeView
 
 
 STAGES = [('tokens','1 · Tokens','Flex turns source characters into tokens. The table shows the actual lexer output.'),
           ('ast','2 · Parse / AST','Yacc checks the mini-language grammar and builds an AST. Solid edges are operands/types; dashed edges link successive statements.'),
-          ('symbols','3 · Semantics','The symbol table records declared names and types. Semantic checks reject undeclared names, repeated declarations, and invalid arithmetic.'),
+          ('symbols','3 · Scopes','Scope 0 is global. Each block has its own scope. Inner declarations can shadow outer names; Storage is the unique TAC identity.'),
           ('tac','4 · TAC','The lab converts expressions to three-address code, using temporary names for intermediate results.'),
-          ('optimized','5 · Optimize','The optimizer folds constants, propagates known values, and simplifies selected arithmetic expressions.')]
+          ('cfg','5 · Flow graph','Basic blocks come from actual TAC. Edges show execution paths; loop backedges return to the condition.'),
+          ('optimized','6 · Optimize','Constants are propagated only within a basic block. Labels and branches discard facts so loops and joins remain safe.')]
 
 
 class LabWindow:
@@ -32,11 +34,12 @@ class LabWindow:
         frame = ttk.Frame(self.window, padding=18)
         frame.pack(fill='both', expand=True)
         ttk.Label(frame, text='Inside the compiler', font=('Helvetica', 23, 'bold')).pack(anchor='w')
-        ttk.Label(frame, text='Real Flex/Yacc lab · .src teaching language · int/float declarations and arithmetic assignments · full C functions and if blocks are not supported.').pack(anchor='w', pady=(5, 12))
+        ttk.Label(frame, text='Flex/Yacc C-like subset · arithmetic, if/else, while, and block scope · full C functions, for loops, and arrays are not supported.').pack(anchor='w', pady=(5, 12))
         toolbar = ttk.Frame(frame)
         toolbar.pack(fill='x')
         ttk.Button(toolbar, text='Open .src', command=self.open).pack(side='left')
-        ttk.Button(toolbar, text='Load lab example', command=self.demo).pack(side='left', padx=6)
+        ttk.Button(toolbar, text='Arithmetic example', command=self.demo).pack(side='left', padx=6)
+        ttk.Button(toolbar, text='Loop + if/else example', command=lambda:self.demo(CONTROL_DEMO)).pack(side='left', padx=(0,6))
         ttk.Button(toolbar, text='Save .src as…', command=self.save).pack(side='left')
         self.run_button = ttk.Button(toolbar, text='Build & inspect', command=self.run)
         self.run_button.pack(side='left', padx=12)
@@ -61,6 +64,7 @@ class LabWindow:
         self.source = CodeView(left)
         self.source.pack(fill='both', expand=True, padx=(0, 10))
         self.source.text.bind('<<Modified>>', self.changed)
+        self.source.text.tag_configure('selectednode',background='#315765')
         self.notebook = ttk.Notebook(right)
         self.notebook.pack(fill='both', expand=True)
         self.pages = {}
@@ -70,7 +74,9 @@ class LabWindow:
             self.pages[key] = page
             ttk.Label(page, text=explanation, wraplength=630).pack(anchor='w', pady=(0, 8))
         self.tokens = self.table(self.pages['tokens'], ('Line','Token','Lexeme'))
-        self.symbols = self.table(self.pages['symbols'], ('Name','Type'))
+        self.symbols = self.table(self.pages['symbols'], ('Name','Type','Scope','Depth','Storage','Line'))
+        self.flow = FlowView(self.pages['cfg'])
+        self.flow.pack(fill='both',expand=True)
         ast = self.pages['ast']
         tools = ttk.Frame(ast)
         tools.pack(fill='x')
@@ -130,6 +136,8 @@ class LabWindow:
         for table in (self.tokens, self.symbols):
             table.delete(*table.get_children())
         self.canvas.delete('all')
+        self.flow.set_graph(None)
+        self.source.text.tag_remove('selectednode','1.0','end')
         for view in (*self.views.values(), self.log):
             self.put(view,'')
         for label in self.stage_labels.values():
@@ -147,9 +155,9 @@ class LabWindow:
     def can_replace(self):
         return not self.dirty or messagebox.askyesno('Unsaved lab source','Discard unsaved lab source edits?',parent=self.window)
 
-    def demo(self):
+    def demo(self,source=DEMO):
         if self.can_replace():
-            self.source.set(DEMO, readonly=False)
+            self.source.set(source, readonly=False)
             self.clear()
             self.dirty = False
             self.status.set('Lab example loaded. Build & inspect to explore its compiler stages.')
@@ -211,15 +219,16 @@ class LabWindow:
                                                      foreground={'passed':'#087f6a','failed':'#b33a46','skipped':'#536b75'}[state])
                 for token in result.tokens:
                     self.tokens.insert('','end',values=token)
-                for symbol in result.symbols:
+                for symbol in result.scope_symbols:
                     self.symbols.insert('','end',values=symbol)
                 for key in self.views:
                     self.put(self.views[key],getattr(result,key) or 'This stage produced no code. Check the pipeline status and compiler log.')
                 self.put(self.log,result.output + '\n\nBUILD LOG\n' + result.build_output)
+                self.flow.set_graph(result.cfg)
                 self.scale = 1.0
                 self.draw()
                 self.node_info.set(f'{len(result.nodes)} AST nodes. Click a node to inspect it; use Fit tree or zoom and scroll to explore.')
-                self.status.set('Artifacts ready. Click a pipeline stage to explore it. AST source locations in this teaching compiler are approximate.'
+                self.status.set('Artifacts ready. Click AST nodes to highlight their source lines; explore Scopes and Flow graph for name visibility and execution paths.'
                                 if all(x=='passed' for x in result.stages.values()) else 'Compilation stopped at the first failed stage. Later stages are skipped; details are in Compiler log.')
                 self.show('ast' if result.nodes else 'tokens')
         self.window.after(100,self.poll)
@@ -240,14 +249,21 @@ class LabWindow:
             options = {'dash':(5,3)} if next_statement else {}
             self.canvas.create_line(x*scale,(y+28)*scale,xx*scale,(yy-28)*scale,
                                     arrow='last',fill='#91a8b1',width=2,**options)
+            label = self.result.ast_edge_labels.get((parent,child),'')
+            if label in ('condition','then','else','body'):
+                self.canvas.create_text((x+xx)/2*scale,(y+yy)/2*scale,text=label,
+                                        fill='#486b7a',font=('Helvetica',max(6,int(9*scale))))
         for key,label in self.result.nodes.items():
             x,y=positions[key]
-            colour = '#ddd7fa' if label.startswith('Declaration') else '#d4eee8' if label.startswith(('Identifier','Assignment')) else '#fff0d7' if label.startswith(('Integer','Float')) else '#e0edf5'
+            colour = '#ffe0cb' if label in ('If','While') else '#eee4f7' if label.startswith('Block') else '#ddd7fa' if label.startswith('Declaration') else '#d4eee8' if label.startswith(('Identifier','Assignment')) else '#fff0d7' if label.startswith(('Integer','Float')) else '#e0edf5'
             tag = f'node-{key}'
             self.canvas.create_rectangle((x-82)*scale,(y-28)*scale,(x+82)*scale,(y+28)*scale,
                                          fill=colour,outline='#8aa3af',width=1,tags=(tag,))
-            self.canvas.create_text(x*scale,y*scale,text=textwrap.fill(label,22),
-                                    font=('Helvetica',max(6,int(11*scale))),fill='#173744',tags=(tag,))
+            font_size = max(3,int(11*scale))
+            chars = max(8,min(22,int(150*scale/(font_size*0.6))))
+            shown = textwrap.fill(textwrap.shorten(label,width=chars*2,placeholder='…'),chars)
+            self.canvas.create_text(x*scale,y*scale,text=shown,
+                                    font=('Helvetica',font_size),fill='#173744',tags=(tag,))
             self.canvas.tag_bind(tag,'<Button-1>',lambda event,k=key:self.inspect(k))
         self.canvas.configure(scrollregion=self.canvas.bbox('all'))
 
@@ -255,6 +271,10 @@ class LabWindow:
         label=self.result.nodes[key]
         kind, _, value = label.partition(': ')
         reasons = {
+            'If': 'The condition selects the then branch or the optional else branch.',
+            'While': 'The condition is checked before every iteration; the body repeats while it is nonzero.',
+            'Block': 'This block creates a scope. Its local names are hidden after the block ends.',
+            'Empty statement': 'A semicolon by itself performs no operation.',
             'Program': 'The root links the statements that make up this program.',
             'Declaration': f'Declares {value}; its child records the declared type.',
             'Assignment': f'Stores the value of its child expression in {value}.',
@@ -264,10 +284,16 @@ class LabWindow:
             'Integer': 'An integer literal written in the source.',
             'Float': 'A floating-point literal written in the source.',
         }
-        self.node_info.set(f'Node {key}: {label}. ' + reasons.get(kind,'Solid edges connect child nodes.'))
+        line = self.result.node_lines.get(key)
+        suffix = f' Source line {line}.' if line else ''
+        self.node_info.set(f'Node {key}: {label}. ' + reasons.get(kind,'Solid edges connect child nodes.') + suffix)
+        self.source.text.tag_remove('selectednode','1.0','end')
+        if line:
+            self.source.text.tag_add('selectednode',f'{line}.0',f'{line}.end')
+            self.source.text.see(f'{line}.0')
 
     def zoom(self,factor):
-        self.scale=max(0.4,min(2.0,self.scale*factor))
+        self.scale=max(0.18,min(2.0,self.scale*factor))
         self.draw()
 
     def reset_view(self):
@@ -280,7 +306,7 @@ class LabWindow:
         if self.result and self.result.nodes:
             positions = layout_graph(self.result.nodes,self.result.edges)
             xs, ys = zip(*positions.values())
-            self.scale = max(0.4,min(1.0,(self.canvas.winfo_width()-20)/(max(xs)-min(xs)+180),
+            self.scale = max(0.18,min(1.0,(self.canvas.winfo_width()-20)/(max(xs)-min(xs)+180),
                                       (self.canvas.winfo_height()-20)/(max(ys)-min(ys)+75)))
             self.draw()
             self.canvas.xview_moveto(0)
